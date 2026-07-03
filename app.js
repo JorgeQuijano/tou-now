@@ -161,6 +161,62 @@ function torontoParts(input) {
   };
 }
 
+// ---------- TIPS ----------
+// Period-aware, calendar-aware copy. Each entry has an optional `minLeft`
+// so e.g. "shift laundry" is only shown once enough of the off-peak window
+// remains to actually run a load.
+const TIPS = {
+  off: {
+    base: 'Good time to run laundry, dishwasher, dryer or charge an EV.',
+    base_weekend: 'Off-peak all day — cheap window for any heavy load.',
+  },
+  mid: {
+    morning: 'Heads up: Mid-Peak morning window. Hold off on the dryer if you can.',
+    evening: 'Heads up: Mid-Peak evening. If it can wait, it usually pays.',
+  },
+  on: 'Heavy loads should wait — the next cheaper window is {nextLabel}.',
+};
+
+// Build today's tip + a "time-to-next-changed-state" hint.
+function buildTip(now, current, segments) {
+  const parts = torontoParts(now);
+  const nextSeg = segments.find(s => s.start >= parts.hour + parts.minute/60 && s.period !== current.period);
+  const timeStr = fmt12(parts.hour, parts.minute);
+  if (current === 'off') {
+    const txt = currentPeriodFor(now).isWeekend ? TIPS.off.base_weekend : TIPS.off.base;
+    const h = parts.hour + parts.minute/60;
+    // If we're late in the day and off-peak is wrapping, show "until X AM" wording.
+    if (nextSeg && nextSeg.start !== 7 && nextSeg.start !== 0) {
+      return `${txt} Until ${fmt12(nextSeg.start)}.`;
+    }
+    if (nextSeg && nextSeg.start === 7) return `${txt} Until 7:00 AM.`;
+    if (nextSeg && nextSeg.start === 0) return `${txt}`;
+    return `${txt} Right now (${timeStr}).`;
+  }
+  if (current === 'mid') {
+    if (parts.hour < 11) return TIPS.mid.morning;
+    return TIPS.mid.evening;
+  }
+  // on
+  const nextAt = nextSeg ? nextSeg.start : 24;
+  const nextLabel = nextSeg && nextAt < 24 ? fmt12(nextAt) : 'midnight';
+  const minutesToNext = Math.max(0, Math.round((nextAt - (parts.hour + parts.minute/60)) * 60));
+  const durStr = minutesToNext < 60 ? `${minutesToNext}m` : `${Math.floor(minutesToNext/60)}h ${minutesToNext%60 ? `${minutesToNext%60}m` : ''}`.trim();
+  const txt = TIPS.on.replace('{nextLabel}', nextLabel);
+  return `${txt}  Wait ${durStr} for a cheaper rate.`;
+}
+
+// Compute the weighted average of today's period prices (hours-weighted, hour-frac
+// weighted at edges).
+function todaysAvg(segments) {
+  let total = 0, hours = 0;
+  for (const s of segments) {
+    total += RATES[s.period] * (s.end - s.start);
+    hours += s.end - s.start;
+  }
+  return hours ? total / hours : RATES.off;
+}
+
 // ---------- RENDER ----------
 const $ = sel => document.querySelector(sel);
 
@@ -172,43 +228,77 @@ function renderChart(segments) {
     const bar = document.createElement('div');
     bar.className = `bar ${seg.period}`;
     bar.style.width = `${w}%`;
-    bar.title = `${fmt12(seg.start)}–${fmt12(seg.end === 24 ? 0 : seg.end)} · ${PERIOD_LABEL[seg.period]}`;
+    bar.title = `${fmt12(seg.start)}–${fmt12(seg.end === 24 ? 0 : seg.end)} · ${PERIOD_LABEL[seg.period]} · ${RATES[seg.period].toFixed(2)} ¢/kWh`;
     chart.appendChild(bar);
   }
-  // "Now" indicator
+  // "Now" line + labelled badge
   const line = document.createElement('div');
   line.className = 'now-line';
   line.id = 'now-line';
-  const dot = document.createElement('div');
-  dot.className = 'now-dot';
-  dot.id = 'now-dot';
+  const badge = document.createElement('div');
+  badge.className = 'now-badge';
+  badge.id = 'now-badge';
+  badge.textContent = 'NOW';
   chart.appendChild(line);
-  chart.appendChild(dot);
+  chart.appendChild(badge);
 }
 
 function setNowPosition() {
   const parts = torontoParts(new Date());
   const frac = (parts.hour + parts.minute / 60) / 24 * 100;
   const line = $('#now-line');
-  const dot = $('#now-dot');
-  if (line) line.style.left = `${frac}%`;
-  if (dot)  dot.style.left  = `${frac}%`;
-  $('#now-time').textContent =
-    `${String(parts.hour).padStart(2, '0')}:${String(parts.minute).padStart(2, '0')}`;
+  const badge = $('#now-badge');
+  if (line)  line.style.left = `${frac}%`;
+  if (badge) badge.style.left = `${frac}%`;
+  const hh = String(parts.hour).padStart(2, '0');
+  const mm = String(parts.minute).padStart(2, '0');
+  const nowEl = $('#now-time');
+  if (nowEl) nowEl.textContent = `${hh}:${mm}`;
+  const badgeTextEl = $('#now-badge');
+  if (badgeTextEl) badgeTextEl.textContent = `Now · ${hh}:${mm}`;
 }
 
 function render() {
-  const info = currentPeriodFor(new Date());
-  const pill = $('.status-pill');
-  pill.dataset.period = info.period;
-  pill.querySelector('.period-name').textContent = PERIOD_LABEL[info.period];
-  pill.querySelector('.rate').textContent = fmtMoney(RATES[info.period]);
-  $('#next').textContent = info.nextLabel;
-  renderChart(info.segmentsToday);
+  const now = new Date();
+  const info = currentPeriodFor(now);
+  const { period, segmentsToday } = info;
+
+  // Hero
+  const hero = $('.hero');
+  hero.dataset.period = period;
+  document.body.dataset.period = period;
+  $('.period-label').textContent = PERIOD_LABEL[period].toUpperCase();
+  $('.rate-amount').textContent = RATES[period].toFixed(2);
+
+  // Secondary line: "until" + delta vs today's avg
+  const avg = todaysAvg(segmentsToday);
+  const current = RATES[period];
+  const diff = current - avg;
+  const absDiff = Math.abs(diff);
+  const deltaEl = $('.delta');
+  if (absDiff < 0.005) { deltaEl.dataset.delta = 'flat'; deltaEl.textContent = 'matches today\'s avg'; }
+  else if (diff > 0)   { deltaEl.dataset.delta = 'up';   deltaEl.textContent = `${absDiff.toFixed(2)} ¢ above today's avg`; }
+  else                 { deltaEl.dataset.delta = 'down'; deltaEl.textContent = `${absDiff.toFixed(2)} ¢ below today's avg`; }
+
+  // "Next change" wording on the secondary line
+  const nextEl = $('.next');
+  nextEl.textContent = info.nextLabel;
+
+  // Tip
+  const tipEl = $('#tip');
+  tipEl.dataset.period = period;
+  $('#tip-text').textContent = buildTip(now, period, segmentsToday);
+
+  // Chart + now position
+  renderChart(segmentsToday);
   setNowPosition();
+
   // Day label
-  const today = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: TZ }).format(new Date());
+  const today = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: TZ }).format(now);
   $('#chart-day').textContent = today;
+
+  // Title flip — page title reflects current state
+  document.title = `${PERIOD_LABEL[period]} · ${RATES[period].toFixed(2)} ¢/kWh — tou-now`;
 }
 
 // ---------- THEME ----------

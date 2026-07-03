@@ -1,0 +1,23 @@
+{
+  "name": "tou-now",
+  "version": "1.0.0",
+  "description": "A tiny static site that tells you, **live**, which Time-of-Use (TOU) electricity rate period you are currently in — built for London Hydro / Ontario residential customers on the OEB Regulated Price Plan.",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JorgeQuijano/tou-now.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/JorgeQuijano/tou-now/issues"
+  },
+  "homepage": "https://github.com/JorgeQuijano/tou-now#readme",
+  "dependencies": {
+    "sharp": "^0.35.3"
+  }
+}
