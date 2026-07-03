@@ -276,12 +276,14 @@ main {
   position: relative;
   height: 64px;
   border-radius: 10px;
-  overflow: hidden;
   display: flex;
   border: 1px solid var(--card-border);
   background: var(--off-bg);
-  margin-top: 18px; /* room for the "Now" badge */
+  margin-top: 18px; /* room for the "Now" badge above (when present) */
 }
+/* Keep the bars contained while letting the now-badge escape. */
+.chart > .bar:first-child { border-top-left-radius: 9px; border-bottom-left-radius: 9px; }
+.chart > .bar:last-child  { border-top-right-radius: 9px; border-bottom-right-radius: 9px; overflow: hidden; }
 .bar { height: 100%; transition: filter .25s ease; }
 .bar.off {
   background:
