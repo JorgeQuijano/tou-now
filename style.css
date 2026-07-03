@@ -265,6 +265,51 @@ main {
 /* Keep tip text legible against its tinted background */
 .tip p { color: var(--fg); }
 
+/* ---------- share button (inline inside hero-secondary) ---------- */
+.share-btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 10px 4px 8px;
+  border: 1px solid var(--card-border);
+  background: color-mix(in srgb, var(--card) 80%, transparent);
+  color: var(--fg);
+  font: 600 12px/1 inherit;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  cursor: pointer;
+  vertical-align: middle;
+  transition: transform .12s ease, background .2s ease, border-color .2s ease, color .2s ease;
+}
+.share-btn svg { width: 14px; height: 14px; opacity: .75; }
+.share-btn:hover { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.share-btn:hover svg { opacity: 1; }
+.share-btn:active { transform: scale(.97); }
+.share-btn:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.share-btn.is-copied {
+  background: var(--off-bg); border-color: var(--off-fg); color: var(--off-fg);
+  animation: share-flash 1.6s ease forwards;
+}
+@keyframes share-flash {
+  0%, 60% { transform: scale(1); }
+  20%     { transform: scale(1.04); }
+}
+
+/* ---------- rates-freshness notice ---------- */
+.rates-freshness {
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--mid-fg) 30%, var(--card-border));
+  background: color-mix(in srgb, var(--mid-bg) 30%, var(--card));
+  color: var(--mid-fg);
+  font: 500 13px/1.4 ui-sans-serif, system-ui, sans-serif;
+  display: flex; align-items: center; gap: 10px;
+}
+.rates-freshness[hidden] { display: none; }
+.rates-freshness svg { width: 16px; height: 16px; flex: none; }
+.rates-freshness strong { color: var(--fg); font-weight: 700; }
+.rates-freshness code { font: 600 12px/1 ui-monospace, monospace; }
+
 /* ---------- chart (unchanged from v1, with patterns) ---------- */
 .chart-wrap {
   background: var(--card); border: 1px solid var(--card-border); border-radius: 16px;
@@ -439,6 +484,7 @@ body.period-flipped .hero::before {
   body.period-flipped .hero::before { animation: none; }
   .eyebrow-dot { animation: none; }
   .now-line, .now-badge { transition: none; }
+  .share-btn.is-copied { animation: none; }
 }
 
 /* ---------- responsive ---------- */

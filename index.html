@@ -12,7 +12,7 @@
   <meta name="twitter:card" content="summary_large_image" />
   <title>tou-now — live Ontario TOU rate</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f1115'/%3E%3Cg fill='none' stroke='%23f7f6f1' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 5 L9 17 L15 17 L13 27 L23 14 L17 14 L20 5 Z'/%3E%3C/g%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="style.css?v=phase2d" />
+  <link rel="stylesheet" href="style.css?v=phase3" />
 </head>
 <body data-period="off">
   <a class="skip" href="#hero">Skip to main content</a>
@@ -48,8 +48,24 @@
         <span class="next">—</span>
         <span class="dot-sep" aria-hidden="true">·</span>
         <span class="delta" data-delta="flat">— vs today's avg</span>
+        <span class="dot-sep" aria-hidden="true">·</span>
+        <button type="button" class="share-btn" id="share-btn" aria-label="Share current rate" title="Share current rate">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="6" cy="12" r="2.5"/>
+              <circle cx="18" cy="6"  r="2.5"/>
+              <circle cx="18" cy="18" r="2.5"/>
+              <path d="M8 11 L16 7"/>
+              <path d="M8 13 L16 17"/>
+            </g>
+          </svg>
+          <span>Share</span>
+        </button>
       </p>
     </section>
+
+    <!-- RATES-FRESHNESS NOTICE — only renders when within ~14d of a rate-change boundary -->
+    <aside class="rates-freshness" id="rates-freshness" hidden></aside>
 
     <!-- LIVE TIP -->
     <section class="tip" id="tip" aria-live="polite" data-period="off">

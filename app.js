@@ -26,6 +26,16 @@ const RATES = {
   on:  24.1,  // on-peak
 };
 
+// The date these rates were last verified against an OEB source. Update this
+// when you bump RATES — it powers the "rates may be stale" notice.
+const RATES_LAST_UPDATED = '2026-07-03';
+
+// Ontario TOU rates refresh twice a year (May 1, Nov 1). Show a soft reminder
+// when we're within 14 days of the next refresh window so users know to check
+// the source if they're planning around the price.
+const RATE_REFRESH_DATES = ['05-01', '11-01'];
+const FRESHNESS_WINDOW_DAYS = 14;
+
 const PERIOD_LABEL = { off: 'Off-Peak', mid: 'Mid-Peak', on: 'On-Peak' };
 const PERIOD_ORDER = ['off', 'mid', 'on'];
 
@@ -370,9 +380,134 @@ function initTheme() {
 function start() {
   initTheme();
   render();
+  wireShareButton();
+  renderRatesFreshness();
   // Update "now" position every 30s (cheap), re-run full render at every minute
   setInterval(setNowPosition, 30_000);
   setInterval(render, 60_000);
 }
 
 document.addEventListener('DOMContentLoaded', start);
+
+// ---------- SHARE BUTTON ----------
+// Uses the Web Share API when available (mobile, some desktops), otherwise
+// copies a period-aware share string to the clipboard with the modern
+// Clipboard API, with a fallback to document.execCommand for ancient browsers.
+function buildShareText(period, rate) {
+  const map = {
+    off: "Off-peak right now in Ontario — best time to run the dryer.",
+    mid: "Mid-peak right now in Ontario — hold off on the big loads if you can.",
+    on:  "On-peak right now in Ontario — avoid heavy loads until evening.",
+  };
+  const emoji = { off: '\u{1F33F}', mid: '\u{26A1}', on: '\u{1F525}' };
+  return `${emoji[period] ?? ''} ${map[period]}\nCurrent TOU: ${PERIOD_LABEL[period]} · ${rate.toFixed(2)} ¢/kWh\nhttps://jorgequijano.github.io/tou-now/`;
+}
+
+function wireShareButton() {
+  const btn = document.getElementById('share-btn');
+  if (!btn) return;
+  btn.addEventListener('click', async () => {
+    const { period, rate } = readCurrentState();
+    const text = buildShareText(period, rate);
+    const url = 'https://jorgequijano.github.io/tou-now/';
+    const title = `tou-now · ${PERIOD_LABEL[period]} · ${rate.toFixed(2)} ¢/kWh`;
+    // Prefer native share sheet on capable devices (mobile, Safari, modern Chrome)
+    if (navigator.share) {
+      try {
+        await navigator.share({ title, text, url });
+        return;
+      } catch (e) {
+        // user cancelled or share failed — fall through to clipboard
+      }
+    }
+    // Clipboard fallback (works on every desktop)
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(text);
+      ok = true;
+    } catch {
+      // Old browser fallback
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { ok = document.execCommand('copy'); } catch { ok = false; }
+      ta.remove();
+    }
+    flashShareButton(btn, ok);
+  });
+}
+
+function readCurrentState() {
+  // Cheap helper: read whatever the renderer last wrote to the DOM, so the
+  // share text always matches what the user sees.
+  const period = document.body.dataset.period || 'off';
+  const amt = document.querySelector('.rate-amount');
+  const rate = amt ? parseFloat(amt.textContent) : RATES[period];
+  return { period, rate: Number.isFinite(rate) ? rate : RATES[period] };
+}
+
+function flashShareButton(btn, ok) {
+  const label = btn.querySelector('span');
+  const original = label.textContent;
+  label.textContent = ok ? 'Copied' : 'Press ⌘C';
+  btn.classList.add('is-copied');
+  btn.disabled = true;
+  setTimeout(() => {
+    label.textContent = original;
+    btn.classList.remove('is-copied');
+    btn.disabled = false;
+  }, 1600);
+}
+
+// ---------- RATES-FRESHNESS NOTICE ----------
+// Show a soft reminder if today is within FRESHNESS_WINDOW_DAYS of the next
+// OEB rate change window, or if RATES_LAST_UPDATED is older than 8 months.
+function renderRatesFreshness() {
+  const el = document.getElementById('rates-freshness');
+  if (!el) return;
+
+  // Find the next refresh date from today (Toronto time)
+  const now = new Date(new Date().toLocaleString('en-US', { timeZone: TZ }));
+  const yyyy = now.getFullYear();
+  const candidates = RATE_REFRESH_DATES.map(mmdd => {
+    const [m, d] = mmdd.split('-').map(Number);
+    return new Date(yyyy, m - 1, d);
+  });
+  // Add next year's windows too, so we always find a future candidate
+  candidates.push(...RATE_REFRESH_DATES.map(mmdd => {
+    const [m, d] = mmdd.split('-').map(Number);
+    return new Date(yyyy + 1, m - 1, d);
+  }));
+  const future = candidates.filter(d => d.getTime() >= now.getTime())
+                           .sort((a, b) => a - b)[0];
+  const daysUntil = future ? Math.round((future - now) / 86_400_000) : Infinity;
+
+  // Also check if RATES_LAST_UPDATED is itself stale (>8 months old)
+  const updated = new Date(RATES_LAST_UPDATED + 'T00:00:00');
+  const monthsOld = (now.getFullYear() - updated.getFullYear()) * 12
+                  + (now.getMonth() - updated.getMonth());
+
+  let body = null;
+  if (monthsOld >= 8) {
+    const mmdd = `${String(updated.getMonth() + 1).padStart(2,'0')}-${String(updated.getDate()).padStart(2,'0')}`;
+    body = `Rates were last verified on <strong>${mmdd}</strong>. OEB typically updates twice yearly — confirm against the <a href="https://www.londonhydro.com/accounts-services/electricity-rates" target="_blank" rel="noopener">London Hydro source</a>.`;
+  } else if (daysUntil <= FRESHNESS_WINDOW_DAYS) {
+    const fmt = new Intl.DateTimeFormat('en-US', { month: 'long', day: 'numeric', timeZone: TZ });
+    const mm = future.getMonth() + 1;
+    const nextSeason = mm === 5 ? 'summer' : 'winter';
+    body = `OEB TOU rates refresh on <strong>${fmt.format(future)}</strong> (${daysUntil === 0 ? 'today' : daysUntil === 1 ? 'tomorrow' : `in ${daysUntil} days`}). The ${nextSeason} prices will go live — check back or confirm against the <a href="https://www.londonhydro.com/accounts-services/electricity-rates" target="_blank" rel="noopener">London Hydro source</a>.`;
+  }
+
+  if (!body) { el.hidden = true; return; }
+  el.innerHTML = `
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+      <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 3l9 16H3z"/>
+        <path d="M12 10v4"/>
+        <circle cx="12" cy="17" r="0.5" fill="currentColor"/>
+      </g>
+    </svg>
+    <span>${body}</span>
+  `;
+  el.hidden = false;
+}
