@@ -29,10 +29,11 @@ const RATES = {
 const PERIOD_LABEL = { off: 'Off-Peak', mid: 'Mid-Peak', on: 'On-Peak' };
 const PERIOD_ORDER = ['off', 'mid', 'on'];
 
-// Format helper for "5:00 PM"
+// Format helper for "5:00 PM". Handles h=24 → "12:00 AM" (midnight, end-of-day).
 const fmt12 = (h, m = 0) => {
-  const period = h >= 12 ? 'PM' : 'AM';
-  const hh = ((h + 11) % 12) + 1;
+  const hh24 = ((h % 24) + 24) % 24;
+  const period = hh24 >= 12 ? 'PM' : 'AM';
+  const hh = ((hh24 + 11) % 12) + 1;
   return `${hh}:${String(m).padStart(2, '0')} ${period}`;
 };
 const fmtMoney = n => `${n.toFixed(2)} ¢/kWh`;
@@ -219,6 +220,10 @@ function todaysAvg(segments) {
 
 // ---------- RENDER ----------
 const $ = sel => document.querySelector(sel);
+// Track the previously-rendered period so we can fire a one-shot animation
+// on the *next* render when the period flips.
+let _lastPeriod = null;
+let _justFlipped = false;
 
 function renderChart(segments) {
   const chart = $('#chart');
@@ -229,6 +234,14 @@ function renderChart(segments) {
     bar.className = `bar ${seg.period}`;
     bar.style.width = `${w}%`;
     bar.title = `${fmt12(seg.start)}–${fmt12(seg.end === 24 ? 0 : seg.end)} · ${PERIOD_LABEL[seg.period]} · ${RATES[seg.period].toFixed(2)} ¢/kWh`;
+    // On-chart period label, only shown if the band is wide enough to fit text
+    if (w >= 12) {
+      const lbl = document.createElement('span');
+      lbl.className = 'bar-label';
+      lbl.setAttribute('aria-hidden', 'true');
+      lbl.textContent = PERIOD_LABEL[seg.period].toUpperCase();
+      bar.appendChild(lbl);
+    }
     chart.appendChild(bar);
   }
   // "Now" line + labelled badge
@@ -262,6 +275,11 @@ function render() {
   const now = new Date();
   const info = currentPeriodFor(now);
   const { period, segmentsToday } = info;
+
+  // Detect period flip (first render after a change). Skipped under
+  // prefers-reduced-motion — see CSS @media (prefers-reduced-motion: reduce).
+  _justFlipped = _lastPeriod !== null && _lastPeriod !== period;
+  _lastPeriod = period;
 
   // Hero
   const hero = $('.hero');
@@ -297,8 +315,27 @@ function render() {
   const today = new Intl.DateTimeFormat('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: TZ }).format(now);
   $('#chart-day').textContent = today;
 
+  // 3-hour axis ticks: 12 AM, 3 AM, 6 AM, ..., 12 AM
+  const axis = $('#chart-axis');
+  axis.innerHTML = '';
+  for (let h = 0; h <= 24; h += 3) {
+    const t = document.createElement('span');
+    t.textContent = fmt12(h);
+    axis.appendChild(t);
+  }
+
   // Title flip — page title reflects current state
   document.title = `${PERIOD_LABEL[period]} · ${RATES[period].toFixed(2)} ¢/kWh — tou-now`;
+
+  // Period-flip celebration. The class triggers a one-shot keyframe animation
+  // on the hero + tip + active chart band. CSS removes it after the animation
+  // ends. Skipped under prefers-reduced-motion via the @media block.
+  if (_justFlipped) {
+    document.body.classList.remove('period-flipped');
+    // Force reflow so the animation re-fires reliably when flips happen close together
+    void document.body.offsetWidth;
+    document.body.classList.add('period-flipped');
+  }
 }
 
 // ---------- THEME ----------

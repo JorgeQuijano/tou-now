@@ -6,6 +6,7 @@
   --card: #ffffff;
   --card-border: #e6e4dc;
   --shadow: 0 1px 3px rgba(15,17,21,.04), 0 14px 40px rgba(15,17,21,.06);
+  --bar-label-fg: rgba(15,17,21,.7);
 
   /* Period semantic — calmer/more saturated than v1 */
   --off-fg:  #0d4a26;
@@ -39,6 +40,7 @@
   --card: #14171d;
   --card-border: #23272f;
   --shadow: 0 1px 3px rgba(0,0,0,.4), 0 14px 40px rgba(0,0,0,.4);
+  --bar-label-fg: rgba(255,255,255,.78);
 
   --off-fg:  #8ee0ad;
   --off-bg:  #14331f;
@@ -254,12 +256,14 @@ main {
 }
 .tip p { margin: 0; }
 .tip-icon { width: 22px; height: 22px; flex: none; opacity: .9; }
-.tip[data-period="off"] { background: color-mix(in srgb, var(--off-bg) 35%, var(--card)); border-color: color-mix(in srgb, var(--off-fg) 30%, var(--card-border)); }
-.tip[data-period="mid"] { background: color-mix(in srgb, var(--mid-bg) 35%, var(--card)); border-color: color-mix(in srgb, var(--mid-fg) 30%, var(--card-border)); }
-.tip[data-period="on"]  { background: color-mix(in srgb, var(--on-bg)  35%, var(--card)); border-color: color-mix(in srgb, var(--on-fg)  30%, var(--card-border)); }
+.tip[data-period="off"] { background: color-mix(in srgb, var(--off-bg) 35%, var(--card)); border-color: color-mix(in srgb, var(--off-fg) 30%, var(--card-border)); color: var(--off-fg); }
+.tip[data-period="mid"] { background: color-mix(in srgb, var(--mid-bg) 35%, var(--card)); border-color: color-mix(in srgb, var(--mid-fg) 30%, var(--card-border)); color: var(--mid-fg); }
+.tip[data-period="on"]  { background: color-mix(in srgb, var(--on-bg)  35%, var(--card)); border-color: color-mix(in srgb, var(--on-fg)  30%, var(--card-border)); color: var(--on-fg); }
 .tip[data-period="off"] .tip-icon { color: var(--off-fg); }
 .tip[data-period="mid"] .tip-icon { color: var(--mid-fg); }
-.tip[data-period="on"]  .tip-icon { color: var(--on-fg);  }
+.tip[data-period="on"]  .tip-icon { color: var(--on-fg); }
+/* Keep tip text legible against its tinted background */
+.tip p { color: var(--fg); }
 
 /* ---------- chart (unchanged from v1, with patterns) ---------- */
 .chart-wrap {
@@ -301,6 +305,26 @@ main {
 .bar.on {
   background: var(--on-bg);
 }
+
+/* On-chart period label, centered inside each band */
+.bar-label {
+  position: absolute;
+  inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  pointer-events: none;
+  z-index: 1;
+  /* Default contrast: dark text on light bands, light text on dark/saturated bands. */
+  color: rgba(15,17,21,.78);
+}
+.bar.off .bar-label { color: var(--off-fg); opacity: .85; }
+.bar.mid .bar-label { color: var(--mid-fg); opacity: .85; }
+.bar.on  .bar-label { color: #ffffff; opacity: .95; text-shadow: 0 1px 2px rgba(0,0,0,.18); }
+
+/* Cursor + hover affordance — the bar's title attr gives the tooltip on desktop */
+.bar { cursor: help; }
 
 .now-line {
   position: absolute; top: -4px; bottom: -4px; width: 2px;
@@ -368,6 +392,45 @@ footer {
 }
 footer a { text-decoration: none; }
 footer a:hover { text-decoration: underline; }
+
+/* ---------- period-flip celebration ---------- */
+/* One-shot keyframe, run only when body has .period-flipped (added/removed by JS). */
+@keyframes hero-pulse {
+  0%   { transform: scale(1);    filter: brightness(1); }
+  35%  { transform: scale(1.012); filter: brightness(1.06); }
+  100% { transform: scale(1);    filter: brightness(1); }
+}
+@keyframes tip-glow {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  30%      { box-shadow: 0 0 0 8px color-mix(in srgb, currentColor 24%, transparent); }
+}
+@keyframes ring-expand {
+  0%   { opacity: .55; transform: scale(.985); }
+  100% { opacity: 0;  transform: scale(1.04); }
+}
+body.period-flipped .hero         { animation: hero-pulse 700ms var(--tr-1); }
+body.period-flipped .tip          { animation: tip-glow 700ms var(--tr-1); }
+body.period-flipped .hero::before {
+  content: "";
+  position: absolute; inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  animation: ring-expand 700ms var(--tr-1);
+}
+
+/* ---------- accessibility: reduced motion ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  body.period-flipped .hero,
+  body.period-flipped .tip,
+  body.period-flipped .hero::before { animation: none; }
+  .eyebrow-dot { animation: none; }
+  .now-line, .now-badge { transition: none; }
+}
 
 /* ---------- responsive ---------- */
 @media (max-width: 540px) {

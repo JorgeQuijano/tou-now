@@ -12,7 +12,7 @@
   <meta name="twitter:card" content="summary_large_image" />
   <title>tou-now — live Ontario TOU rate</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f1115'/%3E%3Cg fill='none' stroke='%23f7f6f1' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 5 L9 17 L15 17 L13 27 L23 14 L17 14 L20 5 Z'/%3E%3C/g%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="style.css?v=8dca279" />
+  <link rel="stylesheet" href="style.css?v=phase2" />
 </head>
 <body data-period="off">
   <a class="skip" href="#hero">Skip to main content</a>
@@ -69,9 +69,7 @@
         <span class="tz">America/Toronto · <span id="now-time">--:--</span></span>
       </div>
       <div class="chart" id="chart" role="img" aria-label="24-hour TOU timeline"></div>
-      <div class="chart-axis" aria-hidden="true">
-        <span>12 AM</span><span>6 AM</span><span>12 PM</span><span>6 PM</span><span>12 AM</span>
-      </div>
+      <div class="chart-axis" id="chart-axis" aria-hidden="true"></div>
       <div class="legend">
         <span class="lg lg-off"><span class="lg-sw" data-pattern="dot"></span> Off-Peak</span>
         <span class="lg lg-mid"><span class="lg-sw" data-pattern="stripe"></span> Mid-Peak</span>
