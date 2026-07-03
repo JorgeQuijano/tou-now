@@ -327,6 +327,11 @@ main {
 .bar.mid .bar-label { color: #6b4500; opacity: .95; font-weight: 800; letter-spacing: .12em; }
 .bar.on  .bar-label { color: #ffffff; opacity: 1; font-weight: 800; letter-spacing: .12em; text-shadow: 0 1px 2px rgba(0,0,0,.25); }
 
+/* Dark theme: bands are saturated/dark, so labels need lighter contrast */
+[data-theme="dark"] .bar.off .bar-label { color: #d6f5e0; text-shadow: 0 1px 2px rgba(0,0,0,.25); }
+[data-theme="dark"] .bar.mid .bar-label { color: #ffe7a8; text-shadow: 0 1px 2px rgba(0,0,0,.25); }
+[data-theme="dark"] .bar.on  .bar-label { color: #ffffff; }
+
 /* Cursor + hover affordance — the bar's title attr gives the tooltip on desktop */
 .bar { cursor: help; }
 
