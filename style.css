@@ -295,18 +295,23 @@ main {
 }
 
 /* ---------- notify button (mirror of share-btn) ---------- */
+.notify-group {
+  display: inline-flex; align-items: center;
+  margin-left: 6px;
+  vertical-align: middle;
+}
 .notify-btn {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 10px 4px 8px;
   border: 1px solid var(--card-border);
+  border-right: none;
+  border-radius: 8px 0 0 8px;
   background: transparent;
   color: var(--muted);
   font: 600 11px/1 ui-sans-serif, system-ui, -apple-system, sans-serif;
-  letter-spacing: .08em; text-transform: uppercase;
-  border-radius: 999px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
   cursor: pointer;
-  vertical-align: middle;
-  margin-left: 6px;
   transition: transform .12s ease, background .2s ease, border-color .2s ease, color .2s ease;
 }
 .notify-btn svg { width: 14px; height: 14px; opacity: .75; }
@@ -320,11 +325,46 @@ main {
   color: var(--mid-fg);
 }
 .notify-btn[aria-pressed="true"] svg { opacity: 1; }
-.notify-btn[aria-pressed="true"] #notify-strike { display: none; }
 .notify-btn.is-denied {
   opacity: .6; cursor: not-allowed;
 }
 .notify-btn.is-denied:hover { background: transparent; color: var(--muted); border-color: var(--card-border); }
+
+/* bell sub-button: attached to the right of notify-btn, separate but coupled */
+.notify-bell {
+  display: inline-grid; place-items: center;
+  width: 28px; height: 26px;
+  border: 1px solid var(--card-border);
+  border-left: 1px solid var(--card-border);
+  border-radius: 0 8px 8px 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0;
+  transition: transform .12s ease, background .2s ease, border-color .2s ease, color .2s ease;
+}
+.notify-bell svg { width: 14px; height: 14px; opacity: .7; }
+.notify-bell:hover { color: var(--fg); border-color: var(--fg); }
+.notify-bell:active { transform: scale(.94); }
+.notify-bell:focus-visible { outline: 2px solid var(--fg); outline-offset: 2px; }
+.notify-bell:disabled {
+  cursor: not-allowed;
+  opacity: .35;
+}
+.notify-bell:disabled:hover { color: var(--muted); border-color: var(--card-border); }
+.notify-bell[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--mid-bg) 40%, var(--card));
+  border-color: var(--mid-fg);
+  color: var(--mid-fg);
+}
+.notify-bell[aria-pressed="true"] svg { opacity: 1; }
+.notify-bell[aria-pressed="true"] #bell-sound-waves { display: block !important; }
+.notify-bell.chime-preview { animation: chime-preview-ring .8s ease-out; }
+@keyframes chime-preview-ring {
+  0%   { transform: scale(1); }
+  40%  { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
 
 /* ---------- toast (in-app period-change alert) ---------- */
 .toast-stack {

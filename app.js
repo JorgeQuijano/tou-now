@@ -382,6 +382,7 @@ function start() {
   render();
   wireShareButton();
   wireNotifyButton();
+  wireBellButton();
   watchPeriodChanges();
   renderRatesFreshness();
 
@@ -480,6 +481,8 @@ function wireNotifyButton() {
       ? (pref === 'in-app' ? 'In-app' : pref === 'browser' ? 'Browser' : 'On')
       : 'Notify';
     btn.classList.toggle('is-denied', permission === 'denied' && pref === 'browser');
+    // Keep the bell button in sync with the notify state
+    if (typeof reflectNotifyControls === 'function') reflectNotifyControls();
   }
   reflect();
 
@@ -588,6 +591,12 @@ function firePeriodChangeAlert(newPeriod, prevPeriod) {
     showPeriodToast(newPeriod, prevPeriod, rate);
   }
 
+  // Audio chime — independent of notify channel, but only enabled when
+  // the user has explicitly toggled it on via the bell button.
+  if (getSoundPref() === 'on') {
+    playChime(newPeriod);
+  }
+
   // Browser notification — only when opted in *and* permission is granted.
   if (pref === 'browser' && 'Notification' in window && Notification.permission === 'granted') {
     try {
@@ -617,6 +626,151 @@ function watchPeriodChanges() {
     }
     lastSeenPeriod = newPeriod;
   }).observe(target, { attributes: true, attributeFilter: ['data-period'] });
+}
+
+// ---------- audio chime (Web Audio API, opt-in, period-tuned) ----------
+//
+// Three short, gentle two-note melodies — one per period — synthesized live
+// with OscillatorNode + GainNode. No asset files, no autoplay risk: AudioContext
+// is only `resume()`d inside a user gesture (the bell-button click).
+//
+// Tuning philosophy:
+//   - Off-Peak = ascending (good news, "go ahead")
+//   - Mid-Peak  = mild upward (heads-up, neutral)
+//   - On-Peak   = descending (heads-up, "wait")
+
+const SOUND_KEY = 'tou-chime';
+let _audioCtx = null;
+let _audioPrimed = false;
+
+function audioCtx() {
+  if (!_audioCtx) {
+    const C = window.AudioContext || window.webkitAudioContext;
+    if (!C) return null;
+    _audioCtx = new C();
+  }
+  return _audioCtx;
+}
+
+// Ensure the AudioContext is running. Must be called inside a user gesture
+// handler (browsers won't start a suspended context from arbitrary code paths).
+function primeAudio() {
+  const ctx = audioCtx();
+  if (!ctx) return false;
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
+  _audioPrimed = true;
+  return true;
+}
+
+// Notes (frequencies in Hz). Pure-tone sine for a clean, non-intrusive feel.
+const NOTE = {
+  C4: 261.63, D4: 293.66, E4: 329.63, F4: 349.23, G4: 392.00, A4: 440.00, B4: 493.88,
+  C5: 523.25, D5: 587.33, E5: 659.25, F5: 698.46, G5: 783.99, A5: 880.00, B5: 987.77,
+  C6: 1046.50,
+};
+
+// Per-period melody: array of { freq, dur } notes (sequential, no overlap).
+// Each melody is ~0.5–0.8 seconds total — short enough not to be intrusive.
+const CHIMES = {
+  off: [ // ascending: "good news, run your loads"
+    { freq: NOTE.C5, dur: 0.16 },
+    { freq: NOTE.E5, dur: 0.16 },
+    { freq: NOTE.G5, dur: 0.34 },
+  ],
+  mid: [ // mild rise: neutral heads-up
+    { freq: NOTE.A4, dur: 0.18 },
+    { freq: NOTE.C5, dur: 0.30 },
+  ],
+  on: [ // descending: "wait, prices are highest"
+    { freq: NOTE.C5, dur: 0.16 },
+    { freq: NOTE.A4, dur: 0.16 },
+    { freq: NOTE.F4, dur: 0.40 },
+  ],
+};
+
+function playChime(period) {
+  if (getSoundPref() !== 'on') return;       // user opted out
+  const ctx = audioCtx();
+  if (!ctx) return;
+  // Lazy resume — fine in the same call stack (no user gesture needed if already
+  // primed). Browsers may still block the very first call if not primed.
+  if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+
+  const melody = CHIMES[period] || CHIMES.mid;
+  const master = ctx.createGain();
+  master.gain.value = 0; // start at 0 — we use the envelope on each note instead
+  master.connect(ctx.destination);
+
+  let t = ctx.currentTime + 0.01;
+  const peak = 0.10; // master peak — quiet enough to not startle
+  const notePeak = peak / Math.max(1, Math.sqrt(melody.length));
+
+  for (const n of melody) {
+    const osc = ctx.createOscillator();
+    const env = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.value = n.freq;
+    // ADSR: 8ms attack, 60ms decay, sustain at notePeak, release over remaining dur
+    env.gain.setValueAtTime(0, t);
+    env.gain.linearRampToValueAtTime(notePeak, t + 0.008);
+    env.gain.linearRampToValueAtTime(notePeak * 0.55, t + 0.07);
+    env.gain.linearRampToValueAtTime(0, t + n.dur);
+    osc.connect(env).connect(master);
+    osc.start(t);
+    osc.stop(t + n.dur + 0.02);
+    t += n.dur;
+  }
+}
+
+function getSoundPref() {
+  try { return localStorage.getItem(SOUND_KEY) || 'off'; } catch { return 'off'; }
+}
+function setSoundPref(v) {
+  try { localStorage.setItem(SOUND_KEY, v); } catch {}
+}
+
+// Shared reflect function: keeps the notify button label/state AND the bell
+// button enabled-state in sync with current prefs.
+function reflectNotifyControls() {
+  const btn = document.getElementById('notify-btn');
+  const bell = document.getElementById('notify-bell');
+  if (!btn || !bell) return;
+
+  const notifyOn = getNotifyPref() !== 'off';
+  const soundOn = getSoundPref() === 'on';
+
+  bell.disabled = !notifyOn;
+  bell.setAttribute('aria-pressed', String(soundOn));
+  bell.title = soundOn
+    ? 'Period-change chime ON — click to mute'
+    : 'Toggle period-change chime (requires notifications on)';
+}
+
+function wireBellButton() {
+  const bell = document.getElementById('notify-bell');
+  if (!bell) return;
+
+  reflectNotifyControls();
+
+  bell.addEventListener('click', async () => {
+    if (bell.disabled) return;
+    primeAudio(); // user gesture: safe to start the AudioContext here
+    const next = getSoundPref() === 'on' ? 'off' : 'on';
+    setSoundPref(next);
+    reflectNotifyControls();
+    if (next === 'on') {
+      // Play a preview so the user knows what to expect.
+      // Use the current period's melody (or mid if undetermined).
+      const cur = (document.body.dataset.period || 'mid');
+      playChime(cur);
+      // Tiny visual confirmation ring (CSS animation)
+      bell.classList.remove('chime-preview');
+      void bell.offsetWidth;
+      bell.classList.add('chime-preview');
+    }
+  });
 }
 
 function flashShareButton(btn, ok) {
