@@ -19,7 +19,7 @@
   <meta name="twitter:image" content="https://jorgequijano.github.io/tou-now/og-image.png" />
   <title>tou-now — live Ontario TOU rate</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230f1115'/%3E%3Cg fill='none' stroke='%23f7f6f1' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M16 5 L9 17 L15 17 L13 27 L23 14 L17 14 L20 5 Z'/%3E%3C/g%3E%3C/svg%3E" />
-  <link rel="stylesheet" href="style.css?v=phase4" />
+  <link rel="stylesheet" href="style.css?v=phase5" />
 </head>
 <body data-period="off">
   <a class="skip" href="#hero">Skip to main content</a>
@@ -68,8 +68,21 @@
           </svg>
           <span>Share</span>
         </button>
+        <button type="button" class="notify-btn" id="notify-btn" aria-label="Notify me when the rate period changes" aria-pressed="false" title="Notify me when the rate period changes">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M6 16 L6 11 a6 6 0 1 1 12 0 V16 L20 18 H4 Z"/>
+              <path d="M10 21 a2 2 0 0 0 4 0"/>
+              <line id="notify-strike" x1="4" y1="4" x2="20" y2="20" style="display:none"/>
+            </g>
+          </svg>
+          <span id="notify-label">Notify</span>
+        </button>
       </p>
     </section>
+
+    <!-- IN-APP TOAST — fires when the period changes (no permission required) -->
+    <div class="toast-stack" id="toast-stack" aria-live="polite" aria-atomic="true"></div>
 
     <!-- RATES-FRESHNESS NOTICE — only renders when within ~14d of a rate-change boundary -->
     <aside class="rates-freshness" id="rates-freshness" hidden></aside>

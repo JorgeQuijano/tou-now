@@ -381,6 +381,8 @@ function start() {
   initTheme();
   render();
   wireShareButton();
+  wireNotifyButton();
+  watchPeriodChanges();
   renderRatesFreshness();
 
   // Sync the 60s render to wall-clock minute boundaries so the "now" line
@@ -451,6 +453,170 @@ function readCurrentState() {
   const amt = document.querySelector('.rate-amount');
   const rate = amt ? parseFloat(amt.textContent) : RATES[period];
   return { period, rate: Number.isFinite(rate) ? rate : RATES[period] };
+}
+
+// ---------- notify / period-change alert ----------
+const NOTIFY_KEY = 'tou-notify';
+const NOTIFY_TOAST_TTL_MS = 9000;
+
+function getNotifyPref() {
+  try { return localStorage.getItem(NOTIFY_KEY) || 'off'; } catch { return 'off'; }
+}
+function setNotifyPref(v) {
+  try { localStorage.setItem(NOTIFY_KEY, v); } catch {}
+}
+
+function wireNotifyButton() {
+  const btn = document.getElementById('notify-btn');
+  if (!btn) return;
+  const label = document.getElementById('notify-label');
+
+  function reflect() {
+    const pref = getNotifyPref();
+    const permission = ('Notification' in window) ? Notification.permission : 'denied';
+    const enabled = pref === 'in-app' || pref === 'browser' || (pref === 'auto' && permission === 'granted');
+    btn.setAttribute('aria-pressed', String(enabled));
+    label.textContent = enabled
+      ? (pref === 'in-app' ? 'In-app' : pref === 'browser' ? 'Browser' : 'On')
+      : 'Notify';
+    btn.classList.toggle('is-denied', permission === 'denied' && pref === 'browser');
+  }
+  reflect();
+
+  btn.addEventListener('click', async () => {
+    const pref = getNotifyPref();
+    if (pref === 'off' || pref === '') {
+      // First click → request browser permission if available, fall back to in-app toast.
+      // We *always* enable the in-app toast regardless of browser-notification outcome,
+      // because the user clicked an explicit button.
+      setNotifyPref('in-app');
+      // Try to upgrade to browser notification in the same gesture.
+      let upgraded = false;
+      if ('Notification' in window && Notification.permission === 'default') {
+        try {
+          const result = await Notification.requestPermission();
+          upgraded = result === 'granted';
+        } catch { /* ignored */ }
+      }
+      if (upgraded) setNotifyPref('browser');
+      reflect();
+    } else {
+      // Already on → turn off.
+      setNotifyPref('off');
+      reflect();
+    }
+  });
+
+  // Reflect externally if the user revokes permission via the browser.
+  if ('Notification' in window) {
+    setInterval(() => {
+      const pref = getNotifyPref();
+      if (pref === 'browser' && Notification.permission !== 'granted') {
+        setNotifyPref('in-app');
+        reflect();
+      }
+    }, 10_000);
+  }
+}
+
+function showPeriodToast(newPeriod, prevPeriod, rate) {
+  const stack = document.getElementById('toast-stack');
+  if (!stack) return;
+
+  // Pull a period-appropriate line from the existing TIPS table.
+  let friendly;
+  if (newPeriod === 'off') {
+    friendly = TIPS.off.base;
+  } else if (newPeriod === 'mid') {
+    // morning vs evening split (matches the page's buildTip logic)
+    const parts = torontoParts(new Date());
+    friendly = parts.hour < 11 ? TIPS.mid.morning : TIPS.mid.evening;
+  } else {
+    // on-peak: format the template if possible
+    friendly = (typeof TIPS.on === 'string')
+      ? TIPS.on.replace('{nextLabel}', 'off-peak tonight')
+      : 'Heavy loads should wait.';
+  }
+
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.setAttribute('role', 'status');
+  t.dataset.period = newPeriod;
+
+  // Per-period accent color from the existing CSS tokens
+  const accent = getComputedStyle(document.documentElement)
+    .getPropertyValue(`--${newPeriod}-fg`).trim() || 'currentColor';
+  const iconBg = getComputedStyle(document.documentElement)
+    .getPropertyValue(`--${newPeriod}-bg`).trim() || 'transparent';
+  t.style.setProperty('--toast-accent', accent);
+  t.style.setProperty('--toast-icon-bg', iconBg);
+
+  const shortLabel = { off: 'Off', mid: 'Mid', on: 'On' }[newPeriod] ?? newPeriod;
+  const titleText = `${PERIOD_LABEL[newPeriod]} · ${rate.toFixed(2)} ¢/kWh`;
+  t.innerHTML = `
+    <div class="toast-icon">${shortLabel.toUpperCase()}</div>
+    <div class="toast-body">
+      <p class="toast-title">${titleText}</p>
+      <p class="toast-message">${friendly}</p>
+    </div>
+    <button type="button" class="toast-close" aria-label="Dismiss" tabindex="-1">×</button>
+  `;
+  stack.appendChild(t);
+
+  // Animate in
+  requestAnimationFrame(() => t.classList.add('is-visible'));
+
+  const dismiss = () => {
+    if (!t.isConnected) return;
+    t.classList.add('is-leaving');
+    setTimeout(() => t.remove(), 350);
+  };
+  t.querySelector('.toast-close').addEventListener('click', e => { e.stopPropagation(); dismiss(); });
+  t.addEventListener('click', e => {
+    if (e.target.closest('.toast-close')) return;
+    dismiss();
+  });
+  setTimeout(dismiss, NOTIFY_TOAST_TTL_MS);
+}
+
+function firePeriodChangeAlert(newPeriod, prevPeriod) {
+  const { rate } = readCurrentState();
+  const pref = getNotifyPref();
+
+  // In-app toast — always try if user opted in (even if they only said 'browser').
+  if (pref !== 'off') {
+    showPeriodToast(newPeriod, prevPeriod, rate);
+  }
+
+  // Browser notification — only when opted in *and* permission is granted.
+  if (pref === 'browser' && 'Notification' in window && Notification.permission === 'granted') {
+    try {
+      const n = new Notification(`${PERIOD_LABEL[newPeriod]} · ${rate.toFixed(2)} ¢/kWh`, {
+        body: `Rate just changed from ${PERIOD_LABEL[prevPeriod]} to ${PERIOD_LABEL[newPeriod]}.`,
+        tag: 'tou-period-change',
+        icon: '/og-image.png',
+      });
+      // Auto-close after 8s — browsers honor this on macOS Safari, less reliably elsewhere
+      setTimeout(() => n.close(), 8000);
+    } catch (e) {
+      // Notifications can throw if called from non-top-level frame, etc. Fall back silently.
+    }
+  }
+}
+
+function watchPeriodChanges() {
+  // Hook into the existing render pipeline: piggyback on _justFlipped.
+  // We override renderAfter to also fire the alert when _justFlipped is true.
+  // (Implementation: we use a MutationObserver so we don't have to fork render())
+  const target = document.body;
+  let lastSeenPeriod = target.dataset.period || null;
+  new MutationObserver(() => {
+    const newPeriod = target.dataset.period;
+    if (newPeriod && lastSeenPeriod && newPeriod !== lastSeenPeriod) {
+      firePeriodChangeAlert(newPeriod, lastSeenPeriod);
+    }
+    lastSeenPeriod = newPeriod;
+  }).observe(target, { attributes: true, attributeFilter: ['data-period'] });
 }
 
 function flashShareButton(btn, ok) {
