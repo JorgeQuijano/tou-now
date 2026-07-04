@@ -382,9 +382,16 @@ function start() {
   render();
   wireShareButton();
   renderRatesFreshness();
-  // Update "now" position every 30s (cheap), re-run full render at every minute
+
+  // Sync the 60s render to wall-clock minute boundaries so the "now" line
+  // doesn't lag up to ~60s behind reality right after boot. Then re-render
+  // every minute. The 30s now-position tick runs as a background refresh.
+  const msToNextMinute = 60_000 - (Date.now() % 60_000);
+  setTimeout(() => {
+    render();
+    setInterval(render, 60_000);
+  }, msToNextMinute);
   setInterval(setNowPosition, 30_000);
-  setInterval(render, 60_000);
 }
 
 document.addEventListener('DOMContentLoaded', start);

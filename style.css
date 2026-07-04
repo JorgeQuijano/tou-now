@@ -317,7 +317,9 @@ main {
 }
 .chart-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
 .chart-head h2 { margin: 0; font-size: 12px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
-.chart-head .tz { color: var(--muted); font: 600 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.chart-head .tz { color: var(--muted); font: 600 13px/1 ui-monospace, SFMono-Regular, Menlo, monospace; display: inline-flex; align-items: baseline; gap: 6px; }
+.chart-head .tz-city { color: var(--fg); font-weight: 700; letter-spacing: .02em; }
+.chart-head .tz-zone { font-size: 11px; opacity: .75; }
 #now-time { color: var(--fg); font-feature-settings: "tnum"; }
 
 .chart-wrap { overflow: visible; }
@@ -432,6 +434,15 @@ main {
 /* ---------- info + footer ---------- */
 .info h3 { margin: 0 0 8px; font-size: 12px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
 .info p  { margin: 0 0 12px; color: var(--fg); }
+.info .scope-note {
+  margin: -4px 0 14px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--card-border);
+  background: color-mix(in srgb, var(--card) 60%, transparent);
+  font-size: 13px;
+  color: var(--muted);
+}
+.info .scope-note strong { color: var(--fg); font-weight: 600; }
 .info details { background: var(--card); border: 1px solid var(--card-border); border-radius: 12px; padding: 12px 14px; box-shadow: var(--shadow); }
 .info details summary { cursor: pointer; font-weight: 600; }
 .info table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
